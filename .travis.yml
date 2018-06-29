@@ -1,0 +1,6 @@
+sudo: false
+language: ruby
+rvm:
+  - ruby-head
+install: travis_retry bundle install
+script: rspec
