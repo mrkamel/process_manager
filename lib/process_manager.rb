@@ -87,20 +87,14 @@ class ProcessManager
   end
 
   def wait
-    trap "INT" do
-      puts "INT"
+    ["INT", "QUIT", "TERM"].each do |sig|
+      trap sig do
+        puts "INT"
 
-      stop_all
+        stop_all
 
-      exit 0
-    end
-
-    trap "QUIT" do
-      puts "QUIT"
-
-      stop_all
-
-      exit 0
+        exit 0
+      end
     end
 
     sleep
