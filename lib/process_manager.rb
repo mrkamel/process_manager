@@ -1,3 +1,4 @@
+
 require "process_manager/version"
 require "fileutils"
 require "logger"
@@ -56,31 +57,7 @@ class ProcessManager
 
   def stop_all
     threads = Dir["/tmp/process_manager/*.pid"].map do |pidfile|
-      Thread.new do
-        begin
-          pid = File.read(pidfile).to_i
-
-          Process.kill "QUIT", pid
-
-          sleep 0.5
-
-          30.times do
-            Process.getpgid pid
-
-            sleep 1
-          end
-
-          @logger.error "Termination of #{File.basename pidfile, ".*"} (PID #{pid}) within 30 seconds failed"
-
-          loop do
-            Process.getpgid pid
-
-            sleep 1
-          end
-        rescue Errno::ENOENT, Errno::ESRCH
-          FileUtils.rm_f pidfile
-        end
-      end
+      Thread.new { terminate(pidfile) }
     end
 
     threads.each(&:join)
@@ -101,6 +78,36 @@ class ProcessManager
   end
 
   private
+
+  def terminate(pidfile)
+    pid = File.read(pidfile).to_i
+
+    waiter = Thread.new do
+      Process.waitpid pid
+    end
+
+    Process.kill "QUIT", pid
+
+    sleep 0.5
+
+    30.times do
+      return unless waiter.alive?
+
+      sleep 1
+    end
+
+    @logger.error "Termination of #{File.basename pidfile, ".*"} (PID #{pid}) within 30 seconds failed"
+
+    loop do
+      return unless waiter.alive?
+
+      sleep 1
+    end
+  rescue => e
+    @logger.error e
+  ensure
+    FileUtils.rm_f pidfile
+  end
 
   def before_fork
     ActiveRecord::Base.connection.disconnect! if defined?(ActiveRecord::Base)
